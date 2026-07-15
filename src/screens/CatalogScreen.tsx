@@ -210,7 +210,6 @@ function ProductDetail({
   const average = reviews.length ? reviews.reduce((sum, review) => sum + review.calificacion, 0) / reviews.length : 0;
 
   async function loadReviews() {
-    if (!isUser) return;
     try {
       setReviews(await api.get<Review[]>(`/productos/${product.id}/resenas/`));
     } catch (err) {
@@ -272,8 +271,8 @@ function ProductDetail({
       {!isUser ? (
         <EmptyState
           icon="lock-closed-outline"
-          title="Inicia sesión para ver y escribir reseñas"
-          copy="Las reseñas están disponibles para compradores registrados."
+          title="Inicia sesión para escribir reseñas"
+          copy="Puedes leer opiniones como invitado. Para publicar una reseña necesitas una cuenta y haber comprado el producto."
           action={<PrimaryButton label="Iniciar sesión" onPress={onRequireLogin} variant="secondary" />}
         />
       ) : (
@@ -298,18 +297,19 @@ function ProductDetail({
             <PrimaryButton label="Publicar reseña" onPress={submitReview} />
           </Card>
           {!reviews.length ? <Text style={sharedStyles.muted}>Este producto todavía no tiene reseñas.</Text> : null}
-          {reviews.map((review) => (
-            <Card key={review.id}>
-              <View style={sharedStyles.rowBetween}>
-                <Text style={styles.reviewer}>{review.usuario_nombre}</Text>
-                <Text style={sharedStyles.muted}>{new Date(review.creado_en).toLocaleDateString('es-MX')}</Text>
-              </View>
-              <Text style={styles.reviewStars}>{'★'.repeat(review.calificacion)}{'☆'.repeat(5 - review.calificacion)}</Text>
-              <Text style={sharedStyles.body}>{review.comentario}</Text>
-            </Card>
-          ))}
         </>
       )}
+
+      {reviews.map((review) => (
+        <Card key={review.id}>
+          <View style={sharedStyles.rowBetween}>
+            <Text style={styles.reviewer}>{review.usuario_nombre}</Text>
+            <Text style={sharedStyles.muted}>{new Date(review.creado_en).toLocaleDateString('es-MX')}</Text>
+          </View>
+          <Text style={styles.reviewStars}>{'★'.repeat(review.calificacion)}{'☆'.repeat(5 - review.calificacion)}</Text>
+          <Text style={sharedStyles.body}>{review.comentario}</Text>
+        </Card>
+      ))}
     </ScrollView>
   );
 }
