@@ -11,12 +11,14 @@
       "supportsTablet": false
     },
     "android": {
+      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/brand/logo.png",
         "backgroundColor": "#fbf9f8"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.diegoo.xs.midespensamarket"
     },
     "web": {
       "favicon": "./assets/brand/logo.png"
@@ -32,6 +34,11 @@
           "resizeMode": "contain"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "53c45277-a3bd-40c3-bd3d-f578f8d80345"
+      }
+    }
   }
 }
