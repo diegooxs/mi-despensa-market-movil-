@@ -49,6 +49,8 @@ export type CartItem = {
     descripcion: string;
     precio: number;
     imagen_url?: string;
+    stock?: number;
+    disponible?: boolean;
   };
 };
 

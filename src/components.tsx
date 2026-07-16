@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { ReactNode } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef } from 'react';
 
 import { colors, fonts, shadow } from './theme';
 import type { TabKey } from './types';
@@ -80,6 +81,79 @@ export function Feedback({ message, kind = 'error' }: { message?: string; kind?:
       />
       <Text style={[styles.feedbackText, kind === 'success' ? styles.successText : styles.errorText]}>{message}</Text>
     </View>
+  );
+}
+
+export function Toast({
+  message,
+  kind = 'success',
+  onDone,
+}: {
+  message?: string;
+  kind?: 'success' | 'error';
+  onDone?: () => void;
+}) {
+  const translateY = useRef(new Animated.Value(20)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!message) return;
+
+    Animated.parallel([
+      Animated.spring(translateY, { toValue: 0, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 1, duration: 180, useNativeDriver: true }),
+    ]).start();
+
+    const timer = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(translateY, { toValue: 20, duration: 180, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0, duration: 180, useNativeDriver: true }),
+      ]).start(() => onDone?.());
+    }, 1800);
+
+    return () => clearTimeout(timer);
+  }, [message, onDone, opacity, translateY]);
+
+  if (!message) return null;
+
+  return (
+    <Animated.View style={[styles.toast, kind === 'error' && styles.toastError, { opacity, transform: [{ translateY }] }]}>
+      <Ionicons name={kind === 'success' ? 'checkmark-circle' : 'alert-circle'} size={20} color={kind === 'success' ? colors.success : colors.error} />
+      <Text style={styles.toastText}>{message}</Text>
+    </Animated.View>
+  );
+}
+
+export function Skeleton({ style }: { style?: object }) {
+  return <View style={[styles.skeleton, style]} />;
+}
+
+export function ProductSkeletonGrid({ count = 4 }: { count?: number }) {
+  return (
+    <View style={styles.skeletonGrid}>
+      {Array.from({ length: count }).map((_, index) => (
+        <View key={index} style={styles.skeletonProduct}>
+          <Skeleton style={styles.skeletonImage} />
+          <Skeleton style={styles.skeletonLineWide} />
+          <Skeleton style={styles.skeletonLine} />
+          <Skeleton style={styles.skeletonButton} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
+export function ListSkeleton({ count = 3 }: { count?: number }) {
+  return (
+    <>
+      {Array.from({ length: count }).map((_, index) => (
+        <Card key={index}>
+          <Skeleton style={styles.skeletonLineWide} />
+          <Skeleton style={styles.skeletonLine} />
+          <Skeleton style={styles.skeletonLineShort} />
+        </Card>
+      ))}
+    </>
   );
 }
 
@@ -226,7 +300,34 @@ const styles = StyleSheet.create({
   feedbackText: { flex: 1, fontFamily: fonts.bodyMedium, fontSize: 13, lineHeight: 19 },
   errorText: { color: '#7f1515' },
   successText: { color: colors.success },
+  toast: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    bottom: 92,
+    zIndex: 20,
+    minHeight: 54,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: 16,
+    paddingHorizontal: 15,
+    backgroundColor: colors.surface,
+    ...shadow,
+  },
+  toastError: { backgroundColor: '#fff7f6' },
+  toastText: { flex: 1, color: colors.text, fontFamily: fonts.bodyMedium, fontSize: 13, lineHeight: 18 },
   card: { padding: 16, gap: 12, borderRadius: 16, backgroundColor: colors.surface, ...shadow },
+  skeleton: { overflow: 'hidden', borderRadius: 10, backgroundColor: '#e9ece8' },
+  skeletonGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  skeletonProduct: { width: '48%', gap: 10, borderRadius: 16, padding: 12, backgroundColor: colors.surface },
+  skeletonImage: { height: 112 },
+  skeletonLineWide: { height: 16, width: '82%' },
+  skeletonLine: { height: 13, width: '62%' },
+  skeletonLineShort: { height: 13, width: '38%' },
+  skeletonButton: { height: 36, width: '100%' },
   emptyCard: { alignItems: 'center', paddingVertical: 32 },
   emptyIcon: { width: 68, height: 68, borderRadius: 34, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
   emptyTitle: { color: colors.text, fontFamily: fonts.headingMedium, fontSize: 20, textAlign: 'center' },

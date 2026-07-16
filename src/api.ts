@@ -1,6 +1,6 @@
 import type { AuthResponse } from './types';
 
-export const API_BASE_URL = 'http://192.168.1.14:8000/api';
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.0.5:8000/api';
 
 let accessToken: string | null = null;
 
@@ -20,11 +20,17 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers.set('Authorization', `Bearer ${accessToken}`);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-    body: options.body && typeof options.body !== 'string' ? JSON.stringify(options.body) : options.body,
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers,
+      body: options.body && typeof options.body !== 'string' ? JSON.stringify(options.body) : options.body,
+    });
+  } catch {
+    throw new Error('No pudimos conectar con la tienda. Revisa tu internet o que el servidor esté encendido.');
+  }
 
   const contentType = response.headers.get('content-type') || '';
   const payload = contentType.includes('application/json') ? await response.json() : await response.text();
@@ -35,7 +41,16 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       const firstError = Object.values(detail).flat()[0];
       throw new Error(String(firstError || `Error ${response.status}`));
     }
-    throw new Error(String(detail || `Error ${response.status}`));
+    if (response.status === 401) {
+      throw new Error('Tu sesión expiró. Inicia sesión nuevamente.');
+    }
+    if (response.status === 403) {
+      throw new Error(String(detail || 'No tienes permiso para realizar esta acción.'));
+    }
+    if (response.status >= 500) {
+      throw new Error('El servidor tuvo un problema. Intenta otra vez en unos segundos.');
+    }
+    throw new Error(String(detail || `No se pudo completar la solicitud (${response.status}).`));
   }
 
   return payload as T;

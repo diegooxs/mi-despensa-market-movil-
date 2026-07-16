@@ -1,14 +1,24 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Card, PrimaryButton, ScreenHeader, sharedStyles } from '../components';
 import { colors, fonts } from '../theme';
 import type { User } from '../types';
 
 export function AccountScreen({ user, onLogin, onLogout, onNavigate }: { user: User | null; onLogin: () => void; onLogout: () => void; onNavigate: (destination: 'orders' | 'cart' | 'assistant') => void }) {
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = () => {
+    setRefreshing(true);
+    setTimeout(() => setRefreshing(false), 450);
+  };
+
   if (!user) {
     return (
-      <ScrollView style={sharedStyles.screen} contentContainerStyle={sharedStyles.content}>
+      <ScrollView
+        style={sharedStyles.screen}
+        contentContainerStyle={sharedStyles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}>
         <ScreenHeader title="Tu cuenta" copy="Inicia sesión para comprar, guardar tu carrito y revisar tus pedidos." eyebrow="Perfil invitado" />
         <Card style={styles.guestCard}>
           <View style={styles.guestIcon}><Ionicons name="storefront-outline" size={42} color={colors.primary} /></View>
@@ -27,7 +37,10 @@ export function AccountScreen({ user, onLogin, onLogout, onNavigate }: { user: U
   }
 
   return (
-    <ScrollView style={sharedStyles.screen} contentContainerStyle={sharedStyles.content}>
+    <ScrollView
+      style={sharedStyles.screen}
+      contentContainerStyle={sharedStyles.content}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}>
       <ScreenHeader title="Mi perfil" copy="Administra tu actividad en Mi Despensa Market." eyebrow="Cuenta" />
       <View style={styles.profileHeader}>
         <View style={styles.avatar}><Text style={styles.avatarText}>{user.nombre.slice(0, 1).toUpperCase()}</Text></View>

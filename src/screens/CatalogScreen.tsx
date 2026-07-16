@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Animated,
   Image,
   Pressable,
@@ -14,7 +13,7 @@ import {
 } from 'react-native';
 
 import { api } from '../api';
-import { Card, EmptyState, Feedback, PrimaryButton, ScreenHeader, sharedStyles } from '../components';
+import { Card, EmptyState, Feedback, ListSkeleton, PrimaryButton, ProductSkeletonGrid, ScreenHeader, Toast, sharedStyles } from '../components';
 import { colors, fonts, shadow } from '../theme';
 import type { Category, Product, Review } from '../types';
 
@@ -50,6 +49,12 @@ export function CatalogScreen({
       return product.disponible && inCategory && matches;
     });
   }, [products, query, selectedCategory]);
+
+  const relatedProducts = selectedProduct
+    ? products
+        .filter((product) => product.id !== selectedProduct.id && product.categoria_nombre === selectedProduct.categoria_nombre && product.disponible)
+        .slice(0, 4)
+    : [];
 
   async function loadData() {
     setError('');
@@ -98,6 +103,8 @@ export function CatalogScreen({
         onBack={() => setSelectedProduct(null)}
         onRequireLogin={onRequireLogin}
         onAdd={() => addToCart(selectedProduct.id)}
+        relatedProducts={relatedProducts}
+        onOpenRelated={setSelectedProduct}
       />
     );
   }
@@ -129,14 +136,18 @@ export function CatalogScreen({
               key={category}
               onPress={() => setSelectedCategory(category)}
               style={[styles.chip, selectedCategory === category && styles.chipActive]}>
+              <Ionicons
+                name={categoryIcon(category) as never}
+                size={18}
+                color={selectedCategory === category ? colors.white : colors.primary}
+              />
               <Text style={[styles.chipText, selectedCategory === category && styles.chipTextActive]}>{category}</Text>
             </Pressable>
           ))}
         </ScrollView>
 
         <Feedback message={error} />
-        <Feedback message={message} kind="success" />
-        {loading ? <ActivityIndicator color={colors.primary} size="large" /> : null}
+        {loading ? <ProductSkeletonGrid /> : null}
 
         {!loading && !visibleProducts.length ? (
           <EmptyState icon="search-outline" title="No encontramos productos" copy="Prueba con otra búsqueda o categoría." />
@@ -163,6 +174,7 @@ export function CatalogScreen({
           </Pressable>
         </Animated.View>
       ) : null}
+      <Toast message={message} onDone={() => setMessage('')} />
     </View>
   );
 }
@@ -195,14 +207,19 @@ function ProductDetail({
   onBack,
   onRequireLogin,
   onAdd,
+  relatedProducts,
+  onOpenRelated,
 }: {
   product: Product;
   isUser: boolean;
   onBack: () => void;
   onRequireLogin: () => void;
   onAdd: () => void;
+  relatedProducts: Product[];
+  onOpenRelated: (product: Product) => void;
 }) {
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
   const [error, setError] = useState('');
@@ -210,10 +227,13 @@ function ProductDetail({
   const average = reviews.length ? reviews.reduce((sum, review) => sum + review.calificacion, 0) / reviews.length : 0;
 
   async function loadReviews() {
+    setReviewsLoading(true);
     try {
       setReviews(await api.get<Review[]>(`/productos/${product.id}/resenas/`));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudieron cargar las reseñas.');
+    } finally {
+      setReviewsLoading(false);
     }
   }
 
@@ -237,7 +257,8 @@ function ProductDetail({
   useEffect(() => { loadReviews(); }, [product.id, isUser]);
 
   return (
-    <ScrollView style={sharedStyles.screen} contentContainerStyle={sharedStyles.content}>
+    <View style={sharedStyles.screen}>
+    <ScrollView style={sharedStyles.screen} contentContainerStyle={[sharedStyles.content, styles.detailContent]}>
       <Pressable onPress={onBack} style={styles.backButton}>
         <Ionicons name="arrow-back" size={22} color={colors.primaryDark} />
         <Text style={styles.backText}>Catálogo</Text>
@@ -252,16 +273,10 @@ function ProductDetail({
         <Text style={styles.detailPrice}>${Number(product.precio).toFixed(2)}</Text>
       </View>
       <View style={styles.ratingRow}>
-        <Text style={styles.stock}>{product.stock > 0 ? 'En stock' : 'Agotado'}</Text>
+        <Text style={styles.stock}>{product.stock > 0 ? `${product.stock} disponibles` : 'Agotado'}</Text>
         {reviews.length ? <Text style={styles.ratingText}>★ {average.toFixed(1)} ({reviews.length} reseñas)</Text> : null}
       </View>
       <Text style={sharedStyles.body}>{product.descripcion}</Text>
-      <PrimaryButton
-        label={isUser ? 'Agregar al carrito' : 'Inicia sesión para comprar'}
-        icon="cart-outline"
-        onPress={isUser ? onAdd : onRequireLogin}
-        disabled={!product.stock}
-      />
 
       <View style={styles.divider} />
       <Text style={sharedStyles.sectionTitle}>Reseñas</Text>
@@ -300,6 +315,7 @@ function ProductDetail({
         </>
       )}
 
+      {reviewsLoading ? <ListSkeleton count={2} /> : null}
       {reviews.map((review) => (
         <Card key={review.id}>
           <View style={sharedStyles.rowBetween}>
@@ -310,15 +326,55 @@ function ProductDetail({
           <Text style={sharedStyles.body}>{review.comentario}</Text>
         </Card>
       ))}
+
+      {relatedProducts.length ? (
+        <>
+          <Text style={sharedStyles.sectionTitle}>También puede interesarte</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.relatedList}>
+            {relatedProducts.map((related) => (
+              <Pressable key={related.id} onPress={() => onOpenRelated(related)} style={styles.relatedCard}>
+                <View style={styles.relatedImageBox}>
+                  {related.imagen_url ? <Image source={{ uri: related.imagen_url }} style={styles.relatedImage} /> : null}
+                </View>
+                <Text numberOfLines={2} style={styles.relatedName}>{related.nombre}</Text>
+                <Text style={styles.relatedPrice}>${Number(related.precio).toFixed(2)}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </>
+      ) : null}
     </ScrollView>
+    <View style={styles.stickyAction}>
+      <View>
+        <Text style={styles.stickyPrice}>${Number(product.precio).toFixed(2)}</Text>
+        <Text style={sharedStyles.muted}>{product.stock > 0 ? `${product.stock} en inventario` : 'Producto agotado'}</Text>
+      </View>
+      <PrimaryButton
+        label={isUser ? 'Agregar' : 'Iniciar sesión'}
+        icon="cart-outline"
+        onPress={isUser ? onAdd : onRequireLogin}
+        disabled={!product.stock}
+      />
+    </View>
+    </View>
   );
+}
+
+function categoryIcon(category: string) {
+  const value = category.toLocaleLowerCase('es');
+  if (value.includes('bebida') || value.includes('jugo') || value.includes('agua')) return 'water-outline';
+  if (value.includes('limpieza') || value.includes('lavander')) return 'sparkles-outline';
+  if (value.includes('lácteo') || value.includes('lacteo') || value.includes('leche')) return 'nutrition-outline';
+  if (value.includes('fruta') || value.includes('verdura')) return 'leaf-outline';
+  if (value.includes('abarrote') || value.includes('grano')) return 'bag-handle-outline';
+  return category === 'Todos' ? 'grid-outline' : 'pricetag-outline';
 }
 
 const styles = StyleSheet.create({
   searchBox: { minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, borderWidth: 1, borderColor: colors.line, borderRadius: 27, backgroundColor: colors.surface },
   searchInput: { flex: 1, minHeight: 52, color: colors.text, fontFamily: fonts.body, fontSize: 14 },
   chips: { gap: 10, paddingRight: 20 },
-  chip: { minHeight: 40, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'center', borderRadius: 20, backgroundColor: colors.surfaceStrong },
+  chip: { minHeight: 42, flexDirection: 'row', gap: 7, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', borderRadius: 21, backgroundColor: colors.surfaceStrong },
   chipActive: { backgroundColor: colors.primary },
   chipText: { color: colors.text, fontFamily: fonts.bodyMedium, fontSize: 13 },
   chipTextActive: { color: colors.white },
@@ -345,6 +401,7 @@ const styles = StyleSheet.create({
   backButton: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 5 },
   backText: { color: colors.primaryDark, fontFamily: fonts.bodyMedium, fontSize: 14 },
   detailImageArea: { height: 330, overflow: 'hidden', borderRadius: 18, backgroundColor: colors.surfaceSoft },
+  detailContent: { paddingBottom: 170 },
   detailImage: { width: '100%', height: '100%', resizeMode: 'contain' },
   detailName: { flex: 1, color: colors.text, fontFamily: fonts.heading, fontSize: 25, lineHeight: 31 },
   detailPrice: { color: colors.primary, fontFamily: fonts.heading, fontSize: 23 },
@@ -356,4 +413,12 @@ const styles = StyleSheet.create({
   reviewInput: { minHeight: 94, paddingTop: 13, textAlignVertical: 'top' },
   reviewer: { color: colors.text, fontFamily: fonts.headingMedium, fontSize: 14 },
   reviewStars: { color: colors.terracotta, fontSize: 17, letterSpacing: 2 },
+  relatedList: { gap: 12, paddingRight: 20 },
+  relatedCard: { width: 138, gap: 8, borderRadius: 14, padding: 10, backgroundColor: colors.surface, ...shadow },
+  relatedImageBox: { height: 90, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.surfaceSoft },
+  relatedImage: { width: '100%', height: '100%', resizeMode: 'contain' },
+  relatedName: { minHeight: 38, color: colors.text, fontFamily: fonts.headingMedium, fontSize: 13, lineHeight: 18 },
+  relatedPrice: { color: colors.primary, fontFamily: fonts.heading, fontSize: 15 },
+  stickyAction: { position: 'absolute', left: 14, right: 14, bottom: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderWidth: 1, borderColor: colors.line, borderRadius: 18, padding: 12, backgroundColor: colors.surface, ...shadow },
+  stickyPrice: { color: colors.primary, fontFamily: fonts.heading, fontSize: 18 },
 });

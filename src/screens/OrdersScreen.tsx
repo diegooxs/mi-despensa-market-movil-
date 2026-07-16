@@ -1,11 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { api } from '../api';
-import { Card, EmptyState, Feedback, PrimaryButton, ScreenHeader, sharedStyles } from '../components';
+import { Card, EmptyState, Feedback, ListSkeleton, PrimaryButton, ScreenHeader, Toast, sharedStyles } from '../components';
 import { colors, fonts } from '../theme';
-import type { Address, CartResponse, Order } from '../types';
+import type { Address, CartResponse, Order, Product } from '../types';
 
 type AddressForm = Omit<Address, 'id'>;
 type PaymentResponse = { mensaje: string; pedido: Order };
@@ -36,29 +36,51 @@ export function OrdersScreen({
   const [showNewAddress, setShowNewAddress] = useState(false);
   const [form, setForm] = useState<AddressForm>(emptyAddress);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
+  const [toast, setToast] = useState('');
+  const invalidCartItems = cart.items.filter((item) => {
+    const stock = item.producto.stock;
+    return item.producto.disponible === false || stock === 0 || (typeof stock === 'number' && item.cantidad > stock);
+  });
 
   async function loadData() {
     if (!isUser) return;
     setLoading(true);
     setError('');
     try {
-      const requests: [Promise<Order[]>, Promise<Address[]>, Promise<CartResponse>?] = [
+      const requests: [Promise<Order[]>, Promise<Address[]>, Promise<CartResponse>?, Promise<Product[]>?] = [
         api.get<Order[]>('/pedidos/'),
         api.get<Address[]>('/direcciones/'),
       ];
-      if (checkoutRequested) requests.push(api.get<CartResponse>('/carrito/'));
-      const [orderData, addressData, cartData] = await Promise.all(requests);
+      if (checkoutRequested) {
+        requests.push(api.get<CartResponse>('/carrito/'));
+        requests.push(api.get<Product[]>('/productos/'));
+      }
+      const [orderData, addressData, cartData, productData] = await Promise.all(requests);
       setOrders(orderData.sort((a, b) => new Date(b.creado_en).getTime() - new Date(a.creado_en).getTime()));
       setAddresses(addressData);
-      if (cartData) setCart(cartData);
+      if (cartData) {
+        const productInfo = new Map((productData || []).map((product) => [product.id, product]));
+        setCart({
+          ...cartData,
+          items: cartData.items.map((item) => ({
+            ...item,
+            producto: {
+              ...item.producto,
+              stock: productInfo.get(item.producto_id)?.stock,
+              disponible: productInfo.get(item.producto_id)?.disponible,
+            },
+          })),
+        });
+      }
       if (addressData.length && !selectedAddress) setSelectedAddress(addressData[0].id);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo cargar la información de pedidos.');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }
 
@@ -69,6 +91,7 @@ export function OrdersScreen({
       return null;
     }
     const address = await api.post<Address>('/direcciones/', form);
+    setToast('Dirección guardada.');
     setAddresses((current) => [...current, address]);
     setSelectedAddress(address.id);
     setShowNewAddress(false);
@@ -78,14 +101,17 @@ export function OrdersScreen({
 
   async function pay() {
     setError('');
-    setMessage('');
+    if (invalidCartItems.length) {
+      setError('Hay productos sin stock suficiente. Vuelve al carrito y ajusta las cantidades.');
+      return;
+    }
     setPaying(true);
     try {
       let address = addresses.find((item) => item.id === selectedAddress);
       if (showNewAddress || !address) address = (await createAddress()) || undefined;
       if (!address) return;
       const response = await api.post<PaymentResponse>('/ventas/pagar/', { direccion_id: address.id });
-      setMessage(response.mensaje);
+      setToast(response.mensaje);
       onPaid(response.pedido, address);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo procesar el pago.');
@@ -108,17 +134,24 @@ export function OrdersScreen({
   if (checkoutRequested) {
     const total = cart.items.reduce((sum, item) => sum + Number(item.producto.precio) * item.cantidad, 0);
     return (
-      <ScrollView style={sharedStyles.screen} contentContainerStyle={sharedStyles.content} keyboardShouldPersistTaps="handled">
+      <View style={sharedStyles.screen}>
+      <ScrollView
+        style={sharedStyles.screen}
+        contentContainerStyle={sharedStyles.content}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} />}>
         <Pressable onPress={onCheckoutClosed} style={styles.backButton}>
           <Ionicons name="arrow-back" size={22} color={colors.primaryDark} />
           <Text style={styles.backText}>Volver al carrito</Text>
         </Pressable>
         <ScreenHeader title="Pedidos y pago" copy="Confirma tu dirección y revisa tu compra antes de pagar." />
-        {loading ? <ActivityIndicator color={colors.primary} /> : null}
         <Feedback message={error} />
-        <Feedback message={message} kind="success" />
+        <Feedback
+          message={invalidCartItems.length ? 'Hay productos sin stock suficiente. Vuelve al carrito y ajusta las cantidades.' : ''}
+        />
 
         <Text style={sharedStyles.sectionTitle}>Direcciones guardadas</Text>
+        {loading && !addresses.length ? <ListSkeleton count={2} /> : null}
         {addresses.map((address) => (
           <Pressable key={address.id} onPress={() => { setSelectedAddress(address.id); setShowNewAddress(false); }} style={[styles.addressCard, selectedAddress === address.id && !showNewAddress && styles.addressCardActive]}>
             <Ionicons name={selectedAddress === address.id && !showNewAddress ? 'radio-button-on' : 'radio-button-off'} size={21} color={colors.primary} />
@@ -157,24 +190,44 @@ export function OrdersScreen({
           <Text style={sharedStyles.sectionTitle}>Resumen del pedido</Text>
           {cart.items.map((item) => (
             <View key={item.id} style={sharedStyles.rowBetween}>
-              <View style={styles.summaryItem}><Text numberOfLines={1} style={styles.summaryName}>{item.producto.nombre}</Text><Text style={sharedStyles.muted}>{item.cantidad} unidad(es)</Text></View>
+              <View style={styles.summaryItem}>
+                <Text numberOfLines={1} style={styles.summaryName}>{item.producto.nombre}</Text>
+                <Text style={[
+                  sharedStyles.muted,
+                  typeof item.producto.stock === 'number' && item.cantidad > item.producto.stock && styles.stockError,
+                ]}>
+                  {item.cantidad} unidad(es)
+                  {typeof item.producto.stock === 'number' ? ` · ${item.producto.stock} disponibles` : ''}
+                </Text>
+              </View>
               <Text style={styles.summaryPrice}>${(Number(item.producto.precio) * item.cantidad).toFixed(2)}</Text>
             </View>
           ))}
           <View style={styles.divider} />
           <View style={sharedStyles.rowBetween}><Text style={styles.totalLabel}>Total</Text><Text style={styles.total}>${total.toFixed(2)}</Text></View>
-          <PrimaryButton label={paying ? 'Procesando...' : 'Confirmar pago'} icon="lock-closed-outline" onPress={pay} disabled={paying || !cart.items.length} />
+          <PrimaryButton
+            label={paying ? 'Procesando...' : 'Confirmar pago'}
+            icon="lock-closed-outline"
+            onPress={pay}
+            disabled={paying || !cart.items.length || Boolean(invalidCartItems.length)}
+          />
           <Text style={styles.secureText}>Transacción segura dentro de Mi Despensa Market</Text>
         </Card>
       </ScrollView>
+      <Toast message={toast} onDone={() => setToast('')} />
+      </View>
     );
   }
 
   return (
-    <ScrollView style={sharedStyles.screen} contentContainerStyle={sharedStyles.content}>
+    <View style={sharedStyles.screen}>
+    <ScrollView
+      style={sharedStyles.screen}
+      contentContainerStyle={sharedStyles.content}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} />}>
       <ScreenHeader title="Mis pedidos" copy="Consulta tus compras y el estado actual de cada entrega." eyebrow="Historial" />
-      {loading ? <ActivityIndicator color={colors.primary} /> : null}
       <Feedback message={error} />
+      {loading && !orders.length ? <ListSkeleton count={3} /> : null}
       {!loading && !orders.length ? <EmptyState icon="receipt-outline" title="Aún no tienes pedidos" copy="Cuando realices una compra aparecerá aquí para que puedas rastrearla." action={<PrimaryButton label="Comprar ahora" onPress={onBrowse} />} /> : null}
       {orders.map((order) => (
         <Card key={order.id}>
@@ -188,6 +241,8 @@ export function OrdersScreen({
         </Card>
       ))}
     </ScrollView>
+    <Toast message={toast} onDone={() => setToast('')} />
+    </View>
   );
 }
 
@@ -210,6 +265,7 @@ const styles = StyleSheet.create({
   summaryItem: { flex: 1, gap: 2 },
   summaryName: { color: colors.text, fontFamily: fonts.bodyMedium, fontSize: 14 },
   summaryPrice: { color: colors.text, fontFamily: fonts.headingMedium, fontSize: 14 },
+  stockError: { color: colors.error, fontFamily: fonts.bodyMedium },
   divider: { height: 1, backgroundColor: colors.line },
   totalLabel: { color: colors.text, fontFamily: fonts.headingMedium, fontSize: 19 },
   total: { color: colors.primary, fontFamily: fonts.heading, fontSize: 25 },
