@@ -71,7 +71,16 @@ export type Order = {
   id: string;
   items: Array<{ producto_id: string; nombre: string; cantidad: number; subtotal: number }>;
   total: number;
-  estado: 'pagado' | 'enviado' | 'entregado' | 'cancelado';
+  estado: 'pendiente' | 'pagado' | 'enviado' | 'entregado' | 'cancelado';
+  pago?: {
+    id: string;
+    pedido_id: string;
+    total: number;
+    metodo: 'tarjeta' | 'efectivo';
+    qr_codigo: string;
+    estado: 'pendiente' | 'pagado' | 'reembolsado' | 'cancelado';
+    creado_en: string;
+  } | null;
   creado_en: string;
 };
 

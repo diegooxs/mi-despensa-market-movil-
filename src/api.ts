@@ -1,6 +1,6 @@
 import type { AuthResponse } from './types';
 
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.0.6:8000/api';
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.0.11:8000/api';
 
 let accessToken: string | null = null;
 
