@@ -241,7 +241,7 @@ export function OrdersScreen({
               <View style={styles.cardPreview}>
                 <View style={styles.cardTopRow}>
                   <View style={styles.cardChip} />
-                  <Ionicons name="wifi-outline" size={28} color="rgba(255,255,255,0.78)" />
+                  <CardBrand number={cardNumber} />
                 </View>
                 <Text style={styles.cardNumber}>{formatCardPreview(cardNumber)}</Text>
                 <View style={styles.cardBottomRow}>
@@ -422,14 +422,45 @@ function formatCardNumber(value: string) {
 }
 
 function formatCardPreview(value: string) {
-  const padded = `${value}${' •••• •••• •••• ••••'.slice(value.length)}`;
-  return padded.trim() || '•••• •••• •••• ••••';
+  const digits = value.replace(/\D/g, '').slice(0, 16);
+  return digits ? digits.replace(/(.{4})/g, '$1 ').trim() : '•••• •••• •••• ••••';
 }
 
 function formatExpiry(value: string) {
   const digits = value.replace(/\D/g, '').slice(0, 4);
   if (digits.length <= 2) return digits;
   return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+}
+
+function cardBrand(number: string) {
+  const digits = number.replace(/\D/g, '');
+  const firstFour = Number(digits.slice(0, 4));
+  if (digits.startsWith('4')) return 'visa';
+  if (digits.startsWith('5') || (firstFour >= 2221 && firstFour <= 2720)) return 'mastercard';
+  return 'unknown';
+}
+
+function CardBrand({ number }: { number: string }) {
+  const brand = cardBrand(number);
+
+  if (brand === 'visa') {
+    return (
+      <View style={styles.visaLogo}>
+        <Text style={styles.visaText}>VISA</Text>
+      </View>
+    );
+  }
+
+  if (brand === 'mastercard') {
+    return (
+      <View style={styles.mastercardLogo}>
+        <View style={[styles.mastercardCircle, styles.mastercardRed]} />
+        <View style={[styles.mastercardCircle, styles.mastercardOrange]} />
+      </View>
+    );
+  }
+
+  return <Ionicons name="wifi-outline" size={28} color="rgba(255,255,255,0.78)" />;
 }
 
 function QrPreview({ value }: { value: string }) {
@@ -473,6 +504,12 @@ const styles = StyleSheet.create({
   cardPreview: { minHeight: 184, borderRadius: 22, padding: 20, justifyContent: 'space-between', backgroundColor: colors.primary, shadowColor: colors.primaryDark, shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.22, shadowRadius: 22, elevation: 5 },
   cardTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cardChip: { width: 48, height: 34, borderRadius: 8, backgroundColor: '#dfc66b' },
+  visaLogo: { minWidth: 74, minHeight: 34, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: '#25479a' },
+  visaText: { color: colors.white, fontFamily: fonts.heading, fontSize: 22, fontStyle: 'italic', letterSpacing: 1 },
+  mastercardLogo: { width: 72, height: 38, alignItems: 'center', justifyContent: 'center' },
+  mastercardCircle: { position: 'absolute', width: 38, height: 38, borderRadius: 19 },
+  mastercardRed: { left: 6, backgroundColor: '#eb001b', opacity: 0.95 },
+  mastercardOrange: { right: 6, backgroundColor: '#f79e1b', opacity: 0.9 },
   cardNumber: { color: colors.white, fontFamily: fonts.headingMedium, fontSize: 20, letterSpacing: 2 },
   cardBottomRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 16 },
   cardMeta: { flex: 1 },

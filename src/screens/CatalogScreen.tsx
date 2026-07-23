@@ -363,6 +363,9 @@ function ProductDetail({
 function categoryIcon(category: string) {
   const value = category.toLocaleLowerCase('es');
   if (value.includes('bebida') || value.includes('jugo') || value.includes('agua')) return 'water-outline';
+  if (value.includes('vino') || value.includes('licor') || value.includes('cerveza')) return 'wine-outline';
+  if (value.includes('botana') || value.includes('dulce') || value.includes('snack')) return 'fast-food-outline';
+  if (value.includes('galleta') || value.includes('pan dulce')) return 'cafe-outline';
   if (value.includes('limpieza') || value.includes('lavander')) return 'sparkles-outline';
   if (value.includes('lácteo') || value.includes('lacteo') || value.includes('leche')) return 'nutrition-outline';
   if (value.includes('fruta') || value.includes('verdura')) return 'leaf-outline';
