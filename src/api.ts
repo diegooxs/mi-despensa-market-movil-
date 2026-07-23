@@ -1,6 +1,6 @@
 import type { AuthResponse } from './types';
 
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.0.11:8000/api';
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://mi-despensa-backend.onrender.com/api';
 
 let accessToken: string | null = null;
 
@@ -40,6 +40,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     if (detail && typeof detail === 'object') {
       const firstError = Object.values(detail).flat()[0];
       throw new Error(String(firstError || `Error ${response.status}`));
+    }
+    if (typeof detail === 'string' && detail.trim()) {
+      throw new Error(detail);
     }
     if (response.status === 401) {
       throw new Error('Tu sesión expiró. Inicia sesión nuevamente.');
